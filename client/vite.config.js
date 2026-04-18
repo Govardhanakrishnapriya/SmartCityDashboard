@@ -5,8 +5,8 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/api': 'http://localhost:5000',
-      '/socket.io': { target: 'http://localhost:5000', ws: true }
+      '/api': 'https://smartcitydashboard.onrender.com',
+      '/socket.io': { target: 'https://smartcitydashboard.onrender.com', ws: true }
     }
   }
 })

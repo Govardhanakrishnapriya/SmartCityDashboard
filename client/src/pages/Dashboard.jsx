@@ -163,7 +163,7 @@ export default function Dashboard() {
     
     const fetchRealCityData = async () => {
       try {
-        const response = await axios.get(`http://localhost:5000/api/city?city=${encodeURIComponent(city)}`);
+        const response = await axios.get(`https://smartcitydashboard.onrender.com/api/city?city=${encodeURIComponent(city)}`);
         const realData = response.data;
         
         setStats(realData.stats);
