@@ -1,7 +1,8 @@
 const CityData = require('../models/CityData');
 const Event = require('../models/Event');
+const { generateRealTimeCityData, updateCity } = require('../utils/realDataFetcher');
 
-// Existing functions (keep them)
+// Get latest data for all zones
 const getLatestData = async (req, res) => {
   try {
     const zones = ['North', 'South', 'East', 'West', 'Central'];
@@ -18,6 +19,7 @@ const getLatestData = async (req, res) => {
   }
 };
 
+// Get historical data
 const getHistoricalData = async (req, res) => {
   try {
     const { zone, hours = 24 } = req.query;
@@ -35,6 +37,7 @@ const getHistoricalData = async (req, res) => {
   }
 };
 
+// Get recent events
 const getEvents = async (req, res) => {
   try {
     const events = await Event.find().sort({ timestamp: -1 }).limit(10);
@@ -44,7 +47,7 @@ const getEvents = async (req, res) => {
   }
 };
 
-// NEW: Get traffic data in format frontend expects
+// Get traffic data in format frontend expects
 const getTrafficData = async (req, res) => {
   try {
     const latestData = await CityData.findOne().sort({ timestamp: -1 });
@@ -52,11 +55,8 @@ const getTrafficData = async (req, res) => {
       return res.json({ traffic: 2500, zones: [] });
     }
     
-    // Calculate average traffic level across zones
     const allData = await CityData.find().sort({ timestamp: -1 }).limit(5);
     const avgTraffic = allData.reduce((acc, curr) => acc + curr.traffic.level, 0) / allData.length;
-    
-    // Convert to traffic flow value (0-3000 vehicles per hour)
     const trafficFlow = Math.floor((avgTraffic / 100) * 3000);
     
     res.json({
@@ -68,7 +68,7 @@ const getTrafficData = async (req, res) => {
   }
 };
 
-// NEW: Get pollution data in format frontend expects
+// Get pollution data in format frontend expects
 const getPollutionData = async (req, res) => {
   try {
     const allData = await CityData.find().sort({ timestamp: -1 }).limit(5);
@@ -83,18 +83,14 @@ const getPollutionData = async (req, res) => {
   }
 };
 
-// NEW: Get stats for dashboard cards
+// Get stats for dashboard cards
 const getStats = async (req, res) => {
   try {
     const allData = await CityData.find().sort({ timestamp: -1 }).limit(5);
     const avgTraffic = allData.reduce((acc, curr) => acc + curr.traffic.level, 0) / allData.length;
     const avgAqi = allData.reduce((acc, curr) => acc + curr.pollution.aqi, 0) / allData.length;
     const trafficFlow = Math.floor((avgTraffic / 100) * 3000);
-    
-    // Count incidents (high traffic + high pollution)
     const incidents = allData.filter(d => d.traffic.level > 70 || d.pollution.aqi > 150).length;
-    
-    // Transit rate (mock calculation)
     const transitRate = Math.floor(70 + (100 - avgTraffic) * 0.3);
     
     res.json({
@@ -108,4 +104,34 @@ const getStats = async (req, res) => {
   }
 };
 
-module.exports = { getLatestData, getHistoricalData, getEvents, getTrafficData, getPollutionData, getStats };
+// NEW: Get data for a specific city (dynamic city search)
+// Get data for a specific city (dynamic city search)
+const getCityDataByName = async (req, res) => {
+  try {
+    const { city } = req.query;
+    if (!city) {
+      return res.status(400).json({ error: 'City name required' });
+    }
+    
+    console.log(`📡 API call: /city?city=${city}`);
+    const cityData = await generateRealTimeCityData(city);
+    res.json(cityData);
+  } catch (error) {
+    console.error('Error in getCityDataByName:', error.message);
+    res.status(500).json({ 
+      error: 'Failed to fetch city data',
+      message: error.message 
+    });
+  }
+};
+
+// Export all functions
+module.exports = { 
+  getLatestData, 
+  getHistoricalData, 
+  getEvents, 
+  getTrafficData, 
+  getPollutionData, 
+  getStats, 
+  getCityDataByName 
+};

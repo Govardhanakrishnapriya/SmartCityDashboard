@@ -1,15 +1,27 @@
 const express = require('express');
-const { getLatestData, getHistoricalData, getEvents, getTrafficData, getPollutionData } = require('../controllers/dataController');
+const { 
+    getLatestData, 
+    getHistoricalData, 
+    getEvents, 
+    getTrafficData, 
+    getPollutionData, 
+    getStats,
+    getCityDataByName 
+} = require('../controllers/dataController');
 const router = express.Router();
 
-// Original endpoints (keep for compatibility)
+// Existing routes
 router.get('/latest', getLatestData);
 router.get('/historical', getHistoricalData);
 router.get('/events', getEvents);
 
-// NEW endpoints for teammate's frontend
-router.get('/data', getLatestData);           // For getCityData()
-router.get('/data/traffic', getTrafficData);  // For getTrafficData()
-router.get('/data/pollution', getPollutionData); // For getPollutionData()
+// Frontend-facing routes
+router.get('/data', getLatestData);
+router.get('/data/traffic', getTrafficData);
+router.get('/data/pollution', getPollutionData);
+router.get('/stats', getStats);
+
+// NEW: Dynamic city search endpoint
+router.get('/city', getCityDataByName);
 
 module.exports = router;

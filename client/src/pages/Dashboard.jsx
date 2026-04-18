@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import axios from 'axios'  // ADD THIS IMPORT
 import Navbar from '../components/Navbar.jsx'
 import StatsCards from '../components/StatsCards.jsx'
 import { TrafficChart, PollutionChart } from '../components/Charts.jsx'
@@ -6,7 +7,6 @@ import Map from '../components/Map.jsx'
 import Alerts from '../components/Alerts.jsx'
 import useSocket from '../hooks/useSocket.js'
 import { getCityData } from '../api/axios.js'
-
 
 const styles = `
   .dashboard {
@@ -122,15 +122,6 @@ const styles = `
   }
 `
 
-const EVENTS = [
-  { name: 'Tech Summit 2026', location: 'Convention Centre', time: '9am–6pm', impact: 'high', type: 'Conference', attendees: '2,400' },
-  { name: 'Half-marathon', location: 'Ring Road East', time: '6am–12pm', impact: 'high', type: 'Sports', attendees: '800' },
-  { name: 'Farmers Market', location: 'Central Plaza', time: '7am–2pm', impact: 'low', type: 'Market', attendees: '400' },
-  { name: 'Open-air Cinema', location: 'Riverside Park', time: '7:30pm', impact: 'low', type: 'Culture', attendees: '800' },
-  { name: 'Street Festival', location: 'Old Town', time: '12pm–10pm', impact: 'med', type: 'Festival', attendees: '3,000' },
-  { name: 'Council Meeting', location: 'City Hall', time: '10am–1pm', impact: 'low', type: 'Civic', attendees: '120' },
-]
-
 function generateMockData(city) {
   if (city.toLowerCase().includes("delhi")) {
     return { traffic: 4000, aqi: 180, incidents: 4, transitRate: 70 }
@@ -147,14 +138,9 @@ export default function Dashboard() {
   const [stats, setStats] = useState(generateMockData(city))
   const [trafficData, setTrafficData] = useState(null)
   const [pollutionData, setPollutionData] = useState(null)
-  const [alerts, setAlerts] = useState([
-    { id: 1, type: 'danger', msg: 'Heavy congestion — Ring Road East', meta: 'Traffic · 2 min ago' },
-    { id: 2, type: 'danger', msg: 'Accident reported — NH-44 Km 12', meta: 'Incident · 8 min ago' },
-    { id: 3, type: 'warn', msg: 'AQI elevated — Industrial Zone (112)', meta: 'Pollution · 15 min ago' },
-    { id: 4, type: 'warn', msg: 'Road closure — Marathon route active', meta: 'Event · 22 min ago' },
-    { id: 5, type: 'info', msg: 'Metro Line 2 minor delays (~5 min)', meta: 'Transit · 30 min ago' },
-    { id: 6, type: 'info', msg: 'Parking near Convention Centre full', meta: 'Parking · 35 min ago' },
-  ])
+  const [alerts, setAlerts] = useState([])  // Start empty, will be filled by API
+  const [events, setEvents] = useState([])   // ADD THIS - for dynamic events
+  const [mapCenter, setMapCenter] = useState({ lat: 17.385, lng: 78.486 })  // ADD THIS
   const [isLive, setIsLive] = useState(false)
 
   useSocket({
@@ -171,173 +157,163 @@ export default function Dashboard() {
     getCityData().catch(() => {})
   }, [])
 
-  // Existing one (keep it)
-useEffect(() => {
-  const id = setInterval(() => {
-    setStats(generateMockData())
-  }, 4000)
-  return () => clearInterval(id)
-}, [])
+  // Fetch real data when city changes
+  useEffect(() => {
+    console.log("Fetching real data for city:", city);
+    
+    const fetchRealCityData = async () => {
+      try {
+        const response = await axios.get(`http://localhost:5000/api/city?city=${encodeURIComponent(city)}`);
+        const realData = response.data;
+        
+        setStats(realData.stats);
+        setAlerts(realData.alerts);
+        setEvents(realData.events);
+        setMapCenter({ lat: realData.coordinates.lat, lng: realData.coordinates.lon });
+        setIsLive(true);
+      } catch (error) {
+        console.error('Error fetching city data:', error);
+        // Fallback to mock data if API fails
+        setStats(generateMockData(city));
+        setAlerts([
+          { id: 1, type: 'danger', msg: `No real-time data available for ${city}`, meta: 'Using fallback data' }
+        ]);
+        setEvents([
+          { name: 'Local Event', location: city, time: 'Today', impact: 'low', type: 'Community', attendees: 100 }
+        ]);
+      }
+    };
+    
+    fetchRealCityData();
+  }, [city]);
 
-// NEW one (add this below)
-useEffect(() => {
-  console.log("City changed:", city)
-
-  setStats(generateMockData(city))
-
-}, [city])
-
-  const impactPill = impact =>
-    impact === 'high' ? 'pill-high High Impact' :
-    impact === 'med' ? 'pill-med Moderate' : 'pill-low Low Impact'
+  const impactPill = (impact) => {
+    if (impact === 'high') return 'pill-high High Impact'
+    if (impact === 'med') return 'pill-med Moderate'
+    return 'pill-low Low Impact'
+  }
 
   return (
     <>
       <style>{styles}</style>
       <div className="dashboard">
         <Navbar
-  activeTab={activeTab}
-  onTabChange={setActiveTab}
-  isLive={isLive}
-  city={city}
-  onCityChange={setCity}
-/>
-<h3 style={{ color: "white", padding: "10px 24px" }}>
-  City: {city}
-</h3>
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          isLive={isLive}
+          city={city}
+          onCityChange={setCity}
+        />
+        <h3 style={{ color: "white", padding: "10px 24px" }}>
+          City: {city}
+        </h3>
         <div className="dash-content">
+          {activeTab === "overview" && (
+            <>
+              <StatsCards data={stats} />
 
-  {activeTab === "overview" && (
-    <>
-      <StatsCards data={stats} />
+              <div style={{ padding: '12px 24px 0', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <TrafficChart data={trafficData} />
+                <PollutionChart data={pollutionData} />
+              </div>
 
-      <div style={{ padding: '12px 24px 0', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <TrafficChart data={trafficData} />
-        <PollutionChart data={pollutionData} />
-      </div>
+              <div className="bottom-row">
+                <div className="bottom-left">
+                  <Map center={[mapCenter.lat, mapCenter.lng]} city={city} />
 
-      <div className="bottom-row">
-        <div className="bottom-left">
-  <Map />
+                  <div className="events-card">
+                    <div className="events-header">
+                      Today's Events - {city}
+                      <span className="events-today">{events.length} scheduled</span>
+                    </div>
+                    <div className="events-grid">
+                      {events.length > 0 ? events.map((e, i) => {
+                        const [pillCls, pillText] = impactPill(e.impact).split(' ')
+                        return (
+                          <div key={i} className="event-cell">
+                            <div
+                              className="event-type"
+                              style={{
+                                color: e.impact === 'high' ? '#ff4d6d' : e.impact === 'med' ? '#f0a500' : '#3d5166'
+                              }}
+                            >
+                              {e.type}
+                            </div>
+                            <div className="event-name">{e.name}</div>
+                            <div className="event-detail">
+                              {e.location}<br />
+                              {e.time} · {e.attendees} ppl
+                            </div>
+                            <span className={`event-pill ${pillCls}`}>{pillText}</span>
+                          </div>
+                        )
+                      }) : (
+                        <div className="event-cell" style={{ gridColumn: '1/-1', textAlign: 'center' }}>
+                          No events found for {city}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <Alerts alerts={alerts} />
+              </div>
+            </>
+          )}
 
-  <div className="events-card">
-    <div className="events-header">
-      Today's Events
-      <span className="events-today">{EVENTS.length} scheduled</span>
-    </div>
-
-    <div className="events-grid">
-      {EVENTS.map((e, i) => {
-        const [pillCls, pillText] = impactPill(e.impact).split(' ')
-        return (
-          <div key={i} className="event-cell">
-            <div
-              className="event-type"
-              style={{
-                color:
-                  e.impact === 'high'
-                    ? '#ff4d6d'
-                    : e.impact === 'med'
-                    ? '#f0a500'
-                    : '#3d5166'
-              }}
-            >
-              {e.type}
+          {activeTab === "traffic" && (
+            <div style={{ padding: 20, minHeight: "70vh" }}>
+              <h2 style={{ color: "white" }}>Traffic Analysis - {city}</h2>
+              <div style={{ maxWidth: "800px", margin: "auto" }}>
+                <TrafficChart data={trafficData} />
+              </div>
             </div>
+          )}
 
-            <div className="event-name">{e.name}</div>
-
-            <div className="event-detail">
-              {e.location}
-              <br />
-              {e.time} · {e.attendees} ppl
+          {activeTab === "pollution" && (
+            <div style={{ padding: 20, minHeight: "70vh" }}>
+              <h2 style={{ color: "white" }}>Pollution Analysis - {city}</h2>
+              <div style={{ maxWidth: "800px", margin: "auto" }}>
+                <PollutionChart data={pollutionData} />
+              </div>
             </div>
+          )}
 
-            <span className={`event-pill ${pillCls}`}>
-              {pillText}
-            </span>
-          </div>
-        )
-      })}
-    </div>
-  </div>
-</div>
-        <Alerts alerts={alerts} />
-      </div>
-    </>
-  )}
-
-  {activeTab === "traffic" && (
-  <div style={{
-    padding: 20,
-    minHeight: "70vh"
-  }}>
-    <h2 style={{ color: "white" }}>Traffic Analysis</h2>
-
-    <div style={{ maxWidth: "800px", margin: "auto" }}>
-      <TrafficChart data={trafficData} />
-    </div>
-  </div>
-)}
-
- {activeTab === "pollution" && (
-  <div style={{
-    padding: 20,
-    minHeight: "70vh"
-  }}>
-    <h2 style={{ color: "white" }}>Pollution Analysis</h2>
-
-    <div style={{ maxWidth: "800px", margin: "auto" }}>
-      <PollutionChart data={pollutionData} />
-    </div>
-  </div>
-)}
-
-  {activeTab === "events" && (
-  <div style={{ padding: 20 }}>
-    <h2 style={{ color: "white" }}>City Events</h2>
-
-    <div className="events-grid">
-      {EVENTS.map((e, i) => {
-        const [pillCls, pillText] = impactPill(e.impact).split(' ')
-        return (
-          <div key={i} className="event-cell">
-            <div
-              className="event-type"
-              style={{
-                color:
-                  e.impact === 'high'
-                    ? '#ff4d6d'
-                    : e.impact === 'med'
-                    ? '#f0a500'
-                    : '#3d5166'
-              }}
-            >
-              {e.type}
+          {activeTab === "events" && (
+            <div style={{ padding: 20 }}>
+              <h2 style={{ color: "white" }}>City Events - {city}</h2>
+              <div className="events-grid">
+                {events.length > 0 ? events.map((e, i) => {
+                  const [pillCls, pillText] = impactPill(e.impact).split(' ')
+                  return (
+                    <div key={i} className="event-cell">
+                      <div
+                        className="event-type"
+                        style={{
+                          color: e.impact === 'high' ? '#ff4d6d' : e.impact === 'med' ? '#f0a500' : '#3d5166'
+                        }}
+                      >
+                        {e.type}
+                      </div>
+                      <div className="event-name">{e.name}</div>
+                      <div className="event-detail">
+                        {e.location}<br />
+                        {e.time} · {e.attendees} ppl
+                      </div>
+                      <span className={`event-pill ${pillCls}`}>{pillText}</span>
+                    </div>
+                  )
+                }) : (
+                  <div className="event-cell" style={{ gridColumn: '1/-1', textAlign: 'center' }}>
+                    No events found for {city}
+                  </div>
+                )}
+              </div>
             </div>
-
-            <div className="event-name">{e.name}</div>
-
-            <div className="event-detail">
-              {e.location}
-              <br />
-              {e.time} · {e.attendees} ppl
-            </div>
-
-            <span className={`event-pill ${pillCls}`}>
-              {pillText}
-            </span>
-          </div>
-        )
-      })}
-    </div>
-  </div>
-)}
-
-</div>
+          )}
+        </div>
         <div className="footer-bar">
           <span>SMART CITY DASHBOARD v1.0 — {city.toUpperCase()}</span>
-          <span>DATA REFRESH: 4s · SOCKET: {isLive ? 'CONNECTED' : 'SIMULATION MODE'}</span>
+          <span>DATA REFRESH: 60s · SOCKET: {isLive ? 'CONNECTED' : 'SIMULATION MODE'}</span>
         </div>
       </div>
     </>
